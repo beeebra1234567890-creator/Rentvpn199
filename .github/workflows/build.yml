@@ -6,9 +6,6 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,57 +14,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare project
-        run: |
-          if [ -f "settings.gradle.kts" ]; then
-            echo "PROJECT_DIR=." >> $GITHUB_ENV
-          elif [ -d "RentVPN" ]; then
-            echo "PROJECT_DIR=RentVPN" >> $GITHUB_ENV
-          else
-            ZIP=$(find . -maxdepth 1 -name '*.zip' -type f | head -n 1)
-            if [ -z "$ZIP" ]; then
-              echo "Project ZIP not found"
-              exit 1
-            fi
-            unzip -q -o "$ZIP"
-            echo "PROJECT_DIR=RentVPN" >> $GITHUB_ENV
-          fi
-
-      - name: Setup Java
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
         with:
-          gradle-version: '8.9'
+          packages: 'platform-tools'
 
-      - name: Download Xray
-        working-directory: ${{ env.PROJECT_DIR }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Unzip project
         run: |
-          mkdir -p app/libs
-          gh release download \
-            -R 2dust/AndroidLibXrayLite \
-            -p '*.aar' \
-            -D app/libs \
-            --clobber
-          ls -lh app/libs
+          ls -la
+          unzip -q -o ./*.zip
+          ls -la RentVPN
+
+      - name: Grant execute permission
+        run: chmod +x RentVPN/gradlew
 
       - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: gradle :app:assembleDebug --stacktrace
+        working-directory: RentVPN
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RENT-VPN-debug-apk
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          name: RentVPN-APK
+          path: RentVPN/**/build/outputs/apk/**/*.apk
           
