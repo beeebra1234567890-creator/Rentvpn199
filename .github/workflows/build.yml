@@ -1,3 +1,4 @@
+
 name: Build APK
 
 on:
@@ -5,42 +6,68 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Unzip project
+      - name: Prepare project
         run: |
-          ls -la
-          unzip -q -o ./*.zip
-          ls -la RentVPN
+          if [ -f "settings.gradle.kts" ]; then
+            echo "PROJECT_DIR=." >> $GITHUB_ENV
+          elif [ -d "RentVPN" ]; then
+            echo "PROJECT_DIR=RentVPN" >> $GITHUB_ENV
+          else
+            ZIP=$(find . -maxdepth 1 -name '*.zip' -type f | head -n 1)
+            if [ -z "$ZIP" ]; then
+              echo "Project ZIP not found"
+              exit 1
+            fi
+            unzip -q -o "$ZIP"
+            echo "PROJECT_DIR=RentVPN" >> $GITHUB_ENV
+          fi
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Setup Android
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.9
+          gradle-version: '8.9'
 
-      - name: Download libv2ray.aar
-        working-directory: RentVPN
+      - name: Download Xray
+        working-directory: ${{ env.PROJECT_DIR }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p app/libs
-          gh release download -R 2dust/AndroidLibXrayLite -p '*.aar' -D app/libs --clobber
-          ls -la app/libs
-          for f in app/libs/*.aar; do [ "$f" != "app/libs/libv2ray.aar" ] && mv "$f" app/libs/libv2ray.aar; done || true
+          gh release download \
+            -R 2dust/AndroidLibXrayLite \
+            -p '*.aar' \
+            -D app/libs \
+            --clobber
+          ls -lh app/libs
 
-      - name: Build debug APK
-        working-directory: RentVPN
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
         run: gradle :app:assembleDebug --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: RENT-VPN-debug-apk
-          path: RentVPN/app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          
