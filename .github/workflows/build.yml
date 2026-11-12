@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,40 +25,25 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Unzip project and find Gradle
+      - name: Unzip project
         run: |
           mkdir -p source
+          unzip -q -o ./*.zip -d source
+          find source -maxdepth 4 -type f | head -100
 
-          shopt -s nullglob
-          archives=( *.zip )
-
-          if [ ${#archives[@]} -gt 0 ]; then
-            unzip -q -o "${archives[0]}" -d source
-          fi
-
-          GRADLEW=$(find . -type f -name gradlew -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew not found!"
-            find . -maxdepth 5 -type d
-            exit 1
-          fi
-
-          PROJECT_DIR="$(dirname "$GRADLEW")"
-          chmod +x "$GRADLEW"
-
-          echo "PROJECT_DIR=$GITHUB_WORKSPACE/$PROJECT_DIR" >> $GITHUB_ENV
-
-          echo "Project found: $PROJECT_DIR"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
 
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: source/RentVPN
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: RentVPN-APK
-          path: '**/build/outputs/apk/**/*.apk'
+          path: source/RentVPN/**/build/outputs/apk/**/*.apk
           if-no-files-found: error
           
